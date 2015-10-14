@@ -201,6 +201,20 @@ for (f in setdiff(names(train),"target")) {
 }
 ## IMPlEMENTED OPTION 1 (end)
 
+## IMPlEMENTING OPTION 2 (begin)
+cat("replacing missing values with median\n")
+for (f in setdiff(names(train),"target")) {
+  if (class(train[[f]])!="character") {
+    train_median_col<-as.numeric(train[[f]])
+    train_median_col[is.na(train_median_col)]=median(train_median_col, na.rm=TRUE)
+    test_median_col<-as.numeric(test[[f]])
+    test_median_col[is.na(test_median_col)]=median(test_median_col, na.rm=TRUE)
+    train[, (f):= train_median_col]
+    test[, (f):= test_median_col]
+  }
+}
+## IMPlEMENTING OPTION 2 (end)
+
 # convert character variable to factor/categorical
 for (f in setdiff(names(train),"target")) {
      if (class(train[[f]])=="character") {
