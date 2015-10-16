@@ -109,8 +109,26 @@ print (test[,(date.features), with = F])
 
 ##  OPTION 2 - TO DO (begin)
 ############ Option 2: Extract Hours for the columns with non-00:00:00 time #############
-##
-##
+############ For now, just extra weekday and month from the datetime columns ########
+##### Create two new columns, and then remove the original date ########
+## weekdays(strptime(...))
+## months(strptime(...))
+new.date.features <- c()
+for (f in date.features) {
+  current.time.train <- strptime(train[[f]], format='%d%b%y:%H:%M:%S', tz="UTC")
+  train[[paste(f,'weekday',sep="_")]]<-weekdays(current.time.train)
+  train[[paste(f,'month',sep="_")]]<-months(current.time.train)
+  
+  current.time.test <- strptime(test[[f]], format='%d%b%y:%H:%M:%S', tz="UTC")
+  test[[paste(f,'weekday',sep="_")]]<-weekdays(current.time.test)
+  test[[paste(f,'month',sep="_")]]<-months(current.time.test)
+  new.date.features<-c(new.date.features,paste(f,'weekday',sep="_"),paste(f,'month',sep="_"))
+}
+print (train[,(new.date.features),with=F])
+# Remove old date feature columns now that weekday and month are both created
+## Data Table another way to access
+train<-train[,setdiff(names(train),date.features),with=F]
+test<-test[,setdiff(names(test),date.features),with=F]
 ##  OPTION 2 - TO DO (end)
 
 print("remaining non-date variables:")
