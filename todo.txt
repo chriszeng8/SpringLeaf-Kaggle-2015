@@ -1,6 +1,7 @@
-1. Time factor (esp: VAR_0204 seems like a very important feature), (whether it is weekday or not)!!!
+l1. Time factor (esp: VAR_0204 seems like a very important feature), (whether it is weekday or not)!!!
 2. Clean up cities!!!
-3. Model Stacking!!! (L2 Logistic Regression, )
-4. L1 regression to remove features.
-5. if we still have time, which I highly doubt. (add text fields clustering for occupation, very cool R Script applying NLP!)
+3. treat 999999, 999998, 999997 and random stuff as NA.
+4. Model Stacking!!! (L2 Logistic Regression, )
+5. L1 regression to remove features.
+6. if we still have time, which I highly doubt. (add text fields clustering for occupation, very cool R Script applying NLP!)
 https://www.kaggle.com/cauldnz/springleaf-marketing-response/clustering-the-text-fields
