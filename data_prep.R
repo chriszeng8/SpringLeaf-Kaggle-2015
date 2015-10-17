@@ -109,8 +109,26 @@ print (test[,(date.features), with = F])
 
 ##  OPTION 2 - TO DO (begin)
 ############ Option 2: Extract Hours for the columns with non-00:00:00 time #############
-##
-##
+############ For now, just extra weekday and month from the datetime columns ########
+##### Create two new columns, and then remove the original date ########
+## weekdays(strptime(...))
+## months(strptime(...))
+new.date.features <- c()
+for (f in date.features) {
+     current.time.train <- strptime(train[[f]], format='%d%b%y:%H:%M:%S', tz="UTC")
+     train[[paste(f,'weekday',sep="_")]]<-weekdays(current.time.train)
+     train[[paste(f,'month',sep="_")]]<-months(current.time.train)
+     
+     current.time.test <- strptime(test[[f]], format='%d%b%y:%H:%M:%S', tz="UTC")
+     test[[paste(f,'weekday',sep="_")]]<-weekdays(current.time.test)
+     test[[paste(f,'month',sep="_")]]<-months(current.time.test)
+     new.date.features<-c(new.date.features,paste(f,'weekday',sep="_"),paste(f,'month',sep="_"))
+}
+print (train[,(new.date.features),with=F])
+# Remove old date feature columns now that weekday and month are both created
+## Data Table another way to access
+train<-train[,setdiff(names(train),date.features),with=F]
+test<-test[,setdiff(names(test),date.features),with=F]
 ##  OPTION 2 - TO DO (end)
 
 print("remaining non-date variables:")
@@ -189,7 +207,10 @@ test[, VAR_0044 := NULL]
 ##          try option 2: replace with median
 ##          try option 3: replace with nearest neighbor or K nearest neighbor
 
+replaceMissingValueOption=1
+
 ## IMPlEMENTED OPTION 1 (begin)
+if (replaceMissingValueOption==1) {
 cat("replacing missing values with -1\n")
 for (f in setdiff(names(train),"target")) {
      if (class(train[[f]])!="character") {
@@ -199,7 +220,24 @@ for (f in setdiff(names(train),"target")) {
           test[, (f):= temp_test_col]
      }
 }
+}
 ## IMPlEMENTED OPTION 1 (end)
+
+## IMPlEMENTING OPTION 2 (begin)
+if (replaceMissingValueOption==2) {
+cat("replacing missing values with median\n")
+for (f in setdiff(names(train),"target")) {
+     if (class(train[[f]])!="character") {
+          train_median_col<-as.numeric(train[[f]])
+          train_median_col[is.na(train_median_col)]=median(train_median_col, na.rm=TRUE)
+          test_median_col<-as.numeric(test[[f]])
+          test_median_col[is.na(test_median_col)]=median(test_median_col, na.rm=TRUE)
+          train[, (f):= train_median_col]
+          test[, (f):= test_median_col]
+     }
+}
+}
+## IMPlEMENTING OPTION 2 (end)
 
 # convert character variable to factor/categorical
 for (f in setdiff(names(train),"target")) {
@@ -258,7 +296,7 @@ for (i in names(train)) {
           # if only 2 variables, look at ratio minus label count/total label count
           if (length(unique(temp))==2) {
                if (min(table(temp))/nrow(train)*100<0.5)
-              nearZeroVarFeatures<-c(nearZeroVarFeatures,i)
+                    nearZeroVarFeatures<-c(nearZeroVarFeatures,i)
           }
      }
 }
