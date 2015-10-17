@@ -9,6 +9,7 @@ require(data.table)
 require(graphics)
 library(RCurl) # download https data
 library(data.table)
+library(lubridate)
 
 ## NOTE: the part where we may try something different will be marked with comment as follows:
 ## ** TODO: try option 1: @#$#@!@# (done)
