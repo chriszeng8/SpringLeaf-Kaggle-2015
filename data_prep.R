@@ -97,14 +97,17 @@ print (train[,(date.features),with=F])
 ##          try option 3: based on either option 1 or option 2, add weekday boolean 
 ##                        as additional feature                           (to do)
 
+DateFeatureConvertOption=1
 ## IMPlEMENTED OPTION 1 (begin)
-for (f in date.features) {
-     # Currently convert date time
-     train[[f]] <- as.double(strptime(train[[f]], format='%d%b%y:%H:%M:%S', tz="UTC"))
-     test[[f]] <- as.double(strptime(test[[f]], format='%d%b%y:%H:%M:%S', tz="UTC"))
+if (DateFeatureConvertOption==1) {
+     for (f in date.features) {
+          # Currently convert date time
+          train[[f]] <- as.double(strptime(train[[f]], format='%d%b%y:%H:%M:%S', tz="UTC"))
+          test[[f]] <- as.double(strptime(test[[f]], format='%d%b%y:%H:%M:%S', tz="UTC"))
+     }
+     print (train[,(date.features), with = F])
+     print (test[,(date.features), with = F])
 }
-print (train[,(date.features), with = F])
-print (test[,(date.features), with = F])
 ## IMPlEMENTED OPTION 1 (end)
 
 ##  OPTION 2 - TO DO (begin)
@@ -113,16 +116,18 @@ print (test[,(date.features), with = F])
 ##### Create two new columns, and then remove the original date ########
 ## weekdays(strptime(...))
 ## months(strptime(...))
-new.date.features <- c()
-for (f in date.features) {
-     current.time.train <- strptime(train[[f]], format='%d%b%y:%H:%M:%S', tz="UTC")
-     train[[paste(f,'weekday',sep="_")]]<-weekdays(current.time.train)
-     train[[paste(f,'month',sep="_")]]<-months(current.time.train)
-     
-     current.time.test <- strptime(test[[f]], format='%d%b%y:%H:%M:%S', tz="UTC")
-     test[[paste(f,'weekday',sep="_")]]<-weekdays(current.time.test)
-     test[[paste(f,'month',sep="_")]]<-months(current.time.test)
-     new.date.features<-c(new.date.features,paste(f,'weekday',sep="_"),paste(f,'month',sep="_"))
+if (DateFeatureConvertOption==2) {
+     new.date.features <- c()
+     for (f in date.features) {
+       current.time.train <- strptime(train[[f]], format='%d%b%y:%H:%M:%S', tz="UTC")
+       train[[paste(f,'weekday',sep="_")]]<-weekdays(current.time.train)
+       train[[paste(f,'month',sep="_")]]<-months(current.time.train)
+       
+       current.time.test <- strptime(test[[f]], format='%d%b%y:%H:%M:%S', tz="UTC")
+       test[[paste(f,'weekday',sep="_")]]<-weekdays(current.time.test)
+       test[[paste(f,'month',sep="_")]]<-months(current.time.test)
+       new.date.features<-c(new.date.features,paste(f,'weekday',sep="_"),paste(f,'month',sep="_"))
+     }
 }
 print (train[,(new.date.features),with=F])
 # Remove old date feature columns now that weekday and month are both created
@@ -224,6 +229,7 @@ for (f in setdiff(names(train),"target")) {
 ## IMPlEMENTED OPTION 1 (end)
 
 ## IMPlEMENTING OPTION 2 (begin)
+
 if (replaceMissingValueOption==2) {
 cat("replacing missing values with median\n")
 for (f in setdiff(names(train),"target")) {
@@ -236,7 +242,7 @@ for (f in setdiff(names(train),"target")) {
           test[, (f):= test_median_col]
      }
 }
-}
+
 ## IMPlEMENTING OPTION 2 (end)
 
 # convert character variable to factor/categorical
