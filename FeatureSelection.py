@@ -8,7 +8,92 @@ import random
 import time
 import pdb
 
-# Define parameters for this script
+def nearZeroVar(x_array, var_threshold):
+	"""
+	Given a ndarray, loop through columns and keep only those that have variance above var_threshold
+	"""
+	x_train = x_array
+	for i in range(x_train.shape[1]):
+		temp_col = x_train[:,i]
+		temp_var = np.var(temp_col)
+		if temp_var <= (var_threshold*(1-var_threshold)):
+			x_train=np.delete(x_train, i, axis=1)
+	return x_train
+
+def computeNan(df):
+	"""
+	This functions returns a list computing the %NaN for each feature given a dataframe
+	"""
+	results=list()
+	for col in df:
+		results.append(float(df[col].isnull().sum())/len(df))
+	return results
+
+def computeGinis(x, y):
+	"""
+	This function takes in two vectors
+	x: binary 0 and 1 labels
+	y: a vector of numbers, prediction_probabilities, or 0/1 predictions
+
+	return: a list of gini scores
+	Note: absolute value of gini should be examined for selection
+	"""
+	from sklearn.metrics import roc_auc_score
+
+	gini_list = list()
+
+	for i in range(x.shape[1]):
+		## Implementing METHOD ONE of Handling missing values: removal of rows ### (BEGIN)
+		y_pred = x[:,i]
+		gini_list.append(2*roc_auc_score(y, y_pred) - 1)
+
+	return gini_list
+
+def obtain_dummy_cols(df):
+	"""
+	given a dataframe, obtain the dummy columns (remove the target label after)
+	dummy column defined as having only 2 different values
+	"""
+	
+	dummy_cols=list()
+	for col in df:
+		if len(np.unique(np.array(df[col]))) == 2:
+			dummy_cols.append(col)
+	return dummy_cols
+
+def ridge_dummy_regression(X,y,x_test,lambda_val=None):
+	"""
+	Train ridge L2 Logistic Regression on X,y. Then predict on x_test
+	If lambda_val is provided, will just use this parameter for the L2 LR
+	otherwise, will run 5-fold CV on C = log(-1.5, 1.5,5)
+
+	This function returns a list of predicted probabilities as a list
+	"""
+	from sklearn.linear_model import LogisticRegression
+	from sklearn.cross_validation import cross_val_score
+
+	Cs=np.logspace(-1.5, 1.5, 5)
+	lr = LogisticRegression(penalty='l2')
+	cv_list=list()
+
+	if not lambda_val:
+		# Fit ridge to various choices of regularization parameter C to select best C
+		for c in Cs:
+			lr.C = c
+			cv_score = cross_val_score(lr, X, y, scoring='roc_auc', cv=5)
+			cv_list.append(np.mean(cv_score))
+
+		print 'Best lambda based on Ridge Cross-Validation...'
+		max_score=np.max(cv_list)
+		lambda_val=Cs[cv_list.index(max_score)]
+		print 1.0/lambda_val, max_score
+
+	# Train LR with the optimized regularization parameter ###
+	lr.C = lambda_val
+	lr.fit(X,y)
+	proba_lst = lr.predict_proba(x_test)[:,1]
+
+	return proba_lst
 
 #145,231 total examples; 33,773 positive; 23.25% response rate
 print 'Reading training data...'
@@ -17,10 +102,6 @@ print 'Finished reading training data...'
 
 print 'Reading test data...'
 oot1_data = pd.read_csv('test_clean.csv', delimiter=',')
-print 'Finished reading test data...'
-
-print 'Reading stacked data...'
-stacked_col = pd.read_csv('stacked_model_pred.csv', delimiter=',')
 print 'Finished reading test data...'
 
 print 'Original Training and Test set size:'
@@ -279,47 +360,23 @@ if use_lasso_sel_cols:
 	final_lasso_cols=[]
 #########################################################################################################
 """
-1. First, we take out all categorical variables (dummy cols), and perform stacking
-2. Stacking works by training Out-of-Sample data (link: data-robot )
-3. Second, we will append onto the orignal data-set
+1. First, we take out all categorical variables (dummy cols), and perform model stacking
+2. Stacking works by training Out-of-Sample data (link: http://nycdatascience.com/featured-talk-1-kaggle-data-scientist-owen-zhang/)
+3. Second, we will append the stacked produced probability vectcor onto the orignal data-set
 4. Take out columns with near-zero Gini
-5. Perform PCA analysis to reduce dimensionality while maintaining feature space (output: Train + Test)
-6. Third, run CV xgboost (done in R studio in AWS)
-7. Lastly, see results
+5. Perform PCA/LASSO/TREES selection to reduce feature space (This is mainly used for faster CV to tune parameters. Expect a smaller feature space to result in an increase in bias)
+6. Third, run CV xgboost (done in R studio in AWS - more memory)
+7. Lastly, train + predict xgboost model with optimal parameters
 """
 
-### Obtain all dummy variable columns ####
-dummy_regression=True
-if dummy_regression:
-	dummy_cols=list()
-	for col in train_data:
-		if len(np.unique(np.array(train_data[col]))) == 2:
-			dummy_cols.append(col)
-	idx = dummy_cols.index('VAR_0217_year')
-	dummy_cols=dummy_cols[(idx+1):]
+dummy_cols=obtain_dummy_cols(train_data)
+## In this case, I know which columns are dummy, so hard-coded the cut-off ###
+idx = dummy_cols.index('VAR_0217_year') 
+dummy_cols=dummy_cols[(idx+1):]
 
 y_train = train_data['target'].values.astype(int)
 x_train_dummy = train_data[dummy_cols].values
 x_test_dummy = oot1_data[dummy_cols].values
-
-#### Computing p=1 predictor gini scores using auc function###
-from sklearn.metrics import roc_auc_score
-
-def computeNan(df):
-	results=list()
-	for col in df:
-		results.append(float(df[col].isnull().sum())/len(df))
-	return results
-
-def computeGinis(x, y):
-	gini_list = list()
-
-	for i in range(x.shape[1]):
-		## Implementing METHOD ONE of Handling missing values: removal of rows ### (BEGIN)
-		y_pred = x[:,i]
-		gini_list.append(2*roc_auc_score(y, y_pred) - 1)
-
-	return gini_list
 
 compute_gini=False
 if compute_gini:
@@ -335,35 +392,7 @@ if compute_gini:
 	print 'File written to disk...'
 
 #########################################################################################################
-from sklearn.linear_model import LogisticRegression
-from sklearn.cross_validation import cross_val_score
-
-def ridge_dummy_regression(X,y,x_test,lambda_val=None):
-	Cs=np.logspace(-1.5, 1.5, 5)
-	lr = LogisticRegression(penalty='l2')
-	cv_list=list()
-
-	if not lambda_val:
-		# Fit ridge to various choices of regularization parameter C to select best C
-		for c in Cs:
-			lr.C = c
-			cv_score = cross_val_score(lr, X, y, scoring='roc_auc', cv=5)
-			cv_list.append(np.mean(cv_score))
-
-		print 'Best lambda based on Ridge Cross-Validation...'
-		max_score=np.max(cv_list)
-		lambda_val=Cs[cv_list.index(max_score)]
-		print 1.0/lambda_val, max_score
-
-	# Train LR with the optimized regularization parameter ###
-	lr.C = lambda_val
-	lr.fit(X,y)
-	proba_lst = lr.predict_proba(x_test)[:,1]
-
-	return proba_lst
-
-### Randomly split the categorical data into halves ###
-### for stacking regression ###
+### Randomly split the categorical data into halves, then perform model stacking on dummy var ###
 data_size=len(x_train_dummy)
 x_train_A=x_train_dummy[0:data_size/2,:]
 x_train_B=x_train_dummy[data_size/2:,:]
@@ -373,12 +402,12 @@ y_train_B=y_train[data_size/2:]
 print 'Size of A and B:'
 print x_train_A.shape, x_train_B.shape
 
-# print 'running part A of stacking'
-# pred_train_A=ridge_dummy_regression(x_train_B,y_train_B,x_train_A,1.0/5.62)
-# print 'running part B of stacking'
-# pred_train_B=ridge_dummy_regression(x_train_A,y_train_A,x_train_B,1.0/31.62)
-# print 'running test set of stacking'
-#pred_test=ridge_dummy_regression(x_train_dummy,y_train,x_test_dummy,1.0/5.62)
+print 'running part A of stacking'
+pred_train_A=ridge_dummy_regression(x_train_B,y_train_B,x_train_A,1.0/5.62)
+print 'running part B of stacking'
+pred_train_B=ridge_dummy_regression(x_train_A,y_train_A,x_train_B,1.0/31.62)
+print 'running test set of stacking'
+pred_test=ridge_dummy_regression(x_train_dummy,y_train,x_test_dummy,1.0/5.62)
 
 ##########################################################################################################
 ### Now we have the dummy variables predicted, append it onto the train + test dataset ###
@@ -386,20 +415,18 @@ print x_train_A.shape, x_train_B.shape
 3. Second, we will append onto the orignal data-set
 4. Take out columns with near-zero Gini
 """
+### Unnamed:0 is a column that just appears after concatenation or reading from R csv file ###
 train_data.drop(dummy_cols+['target','Unnamed: 0'], axis=1,inplace=True)
 oot1_data.drop(dummy_cols+['Unnamed: 0'], axis=1,inplace=True)
 
-# stacked_col=pd.concat([pd.DataFrame(pred_train_A),pd.DataFrame(pred_train_B)])
-# stacked_col.reset_index(drop=True, inplace=True) #Very important!! concat joins based on indices
-# print 'writing stacked columns data to file...'
-# stacked_col.to_csv("stacked_model_pred.csv")
+stacked_col=pd.concat([pd.DataFrame(pred_train_A),pd.DataFrame(pred_train_B)])
+stacked_col.reset_index(drop=True, inplace=True) #Very important!! concat joins based on indices
 
 train_data=pd.concat([train_data,stacked_col],axis=1)
 oot1_data=pd.concat([oot1_data,pd.DataFrame(pred_test)],axis=1)
 
 train_data.drop(list(set(zero_gini_cols)-set(dummy_cols)),axis=1,inplace=True)
 oot1_data.drop(list(set(zero_gini_cols)-set(dummy_cols)),axis=1,inplace=True)
-
 
 feature_names = list(train_data.columns.values)
 
@@ -408,10 +435,10 @@ print train_data.shape, oot1_data.shape
 
 x_train_final=train_data.values.astype(float)
 x_test_final=oot1_data.values.astype(float)
-#pdb.set_trace()
+
 #########################################################################################################
 """
-5. Perform PCA analysis to reduce dimensionality while maintaining feature space (output: Train + Test)
+5. Perform PCA/LASSO/TREES selection to reduce feature space (This is mainly used for faster CV to tune parameters. Expect a smaller feature space to result in an increase in bias)
 """
 from sklearn.preprocessing import StandardScaler
 
@@ -421,15 +448,6 @@ print np.isnan(x_test_final).sum() #should be zero
 
 ### Remove columns that have near zero variance ###
 ### There shouldn't be any, as we already did this in R ###
-def nearZeroVar(x_array, var_threshold):
-	x_train = x_array
-	for i in range(x_train.shape[1]):
-		temp_col = x_train[:,i]
-		temp_var = np.var(temp_col)
-		if temp_var <= (var_threshold*(1-var_threshold)):
-			x_train=np.delete(x_train, i, axis=1)
-	return x_train
-
 #x_train=nearZeroVar(x_train, 0.8)
 #x_test=nearZeroVar(x_test, 0.8)
 
@@ -510,17 +528,3 @@ test_final.to_csv("test_final.csv", header=feature_names)
 feature_names.insert(0,'target')
 x_train_final.to_csv("train_final.csv", header=feature_names)
 
-##########################################################################################################
-### GridSearchCV for xgboost
-# from sklearn.ensemble import GradientBoostingClassifier
-# from sklearn.grid_search import GridSearchCV
-
-# param_grid = {'learning_rate': [0.1,0.05,0.02,0.01],
-# 				'max_depth':[6,8],
-# 				'min_samples_split':[30,40,50],
-# 				'max_features':[1.0,0.3,0.1]}
-
-# est = GradientBoostingClassifier(n_rounds = 1000)
-# gs_cv = GridSearchCV(est, param_grid).fit(X,y)
-# #best_parameters
-# gs_cv.best_params_
