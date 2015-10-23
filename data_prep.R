@@ -43,6 +43,9 @@ feature.types <- lapply(train,class)
 nonnumeric.types <- feature.types[(feature.types!="integer")&(feature.types!="numeric")]
 nonnumeric.featurenames <- names(nonnumeric.types)
 interger64.featurename <- nonnumeric.featurenames[nonnumeric.types=="integer64"]
+
+
+
 logical.featurenames <- nonnumeric.featurenames[nonnumeric.types=="logical"]
 # logical.data<-train[,logical.featurenames,with=F]
 # sum(!is.na(logical.data)) 
@@ -53,9 +56,31 @@ logical.featurenames <- nonnumeric.featurenames[nonnumeric.types=="logical"]
 train[, (logical.featurenames) := NULL]
 test[, (logical.featurenames) := NULL]
 
+## ===================== PROCESSING 64 BIT INTEGER NUMBER =========================
+## ** TODO: try option 1: remove it
+##                        Given that 9218868437227407266 is actually the only 64 bit number,
+##          try option 2: truncate the only 64 bit number to have the same length as the other digit
+##          try option 3: treat it as a NA value
+integer64_Option=2
+if (integer64_Option==1) {
 # delete the integer64 typed features (temporarily)
-train[, (interger64.featurename) := NULL]
-test[, (interger64.featurename) := NULL]
+     train[, (interger64.featurename) := NULL]
+     test[, (interger64.featurename) := NULL]
+} else if(integer64_Option==2) {
+     interger64.featurename
+#      print(unique(train[[interger64.featurename]][train[[interger64.featurename]]>99999999999]))
+#      print(unique(test[[interger64.featurename]][test[[interger64.featurename]]>99999999999]))
+     replaced.train_integer64<-ifelse(train[[interger64.featurename]]>99999999999,'92188684372',as.character(train[[interger64.featurename]]))
+     replaced.train_integer64<-as.numeric(replaced.train_integer64)
+     replaced.test_integer64<-ifelse(test[[interger64.featurename]]>99999999999,'92188684372',as.character(test[[interger64.featurename]]))
+     replaced.test_integer64<-as.numeric(replaced.test_integer64)
+     train[ , VAR_0212 := replaced.train_integer64]
+     test[ , VAR_0212 := replaced.test_integer64]
+}
+
+sum(is.na(train[ , VAR_0212]))
+class(train[ , VAR_0212])
+
 
 # Now, after removal of logical/64bit integer variables, again extract/update names of non-numeric features
 feature.types<-lapply(train,class)
@@ -97,7 +122,7 @@ print (train[,(date.features),with=F])
 ##          try option 3: based on either option 1 or option 2, add weekday boolean 
 ##                        as additional feature                           (to do)
 
-DateFeatureConvertOption=1
+DateFeatureConvertOption=3
 ## IMPlEMENTED OPTION 1 (begin)
 if (DateFeatureConvertOption==1) {
      for (f in date.features) {
@@ -106,11 +131,11 @@ if (DateFeatureConvertOption==1) {
           test[[f]] <- as.double(strptime(test[[f]], format='%d%b%y:%H:%M:%S', tz="UTC"))
      }
      print (train[,(date.features), with = F])
-     print (test[,(date.features), with = F])
+     print (test[,(date.features), with = F])  
 }
 ## IMPlEMENTED OPTION 1 (end)
 
-##  OPTION 2 - TO DO (begin)
+##  OPTION 2 - DONE (begin)
 ############ Option 2: Extract Hours for the columns with non-00:00:00 time #############
 ############ For now, just extra weekday and month from the datetime columns ########
 ##### Create two new columns, and then remove the original date ########
@@ -128,13 +153,43 @@ if (DateFeatureConvertOption==2) {
        test[[paste(f,'month',sep="_")]]<-months(current.time.test)
        new.date.features<-c(new.date.features,paste(f,'weekday',sep="_"),paste(f,'month',sep="_"))
      }
+     print (train[,(new.date.features),with=F])
+     # Remove old date feature columns now that weekday and month are both created
+     ## Data Table another way to access
+     train<-train[,setdiff(names(train),date.features),with=F]
+     test<-test[,setdiff(names(test),date.features),with=F]
+     ##  OPTION 2 - TO DO (end)
 }
-print (train[,(new.date.features),with=F])
-# Remove old date feature columns now that weekday and month are both created
-## Data Table another way to access
-train<-train[,setdiff(names(train),date.features),with=F]
-test<-test[,setdiff(names(test),date.features),with=F]
-##  OPTION 2 - TO DO (end)
+
+# VAR_0204 has unique hour
+     
+if (DateFeatureConvertOption==3) {
+     for (f in date.features) {
+          traintime<-strptime(train[[f]], format='%d%b%y:%H:%M:%S', tz="UTC")
+          print (paste("===============",f,"============="))
+          print (table(hour(traintime)[!is.na(hour(traintime))]))
+          print (table(weekdays(traintime)[!is.na(weekdays(traintime))]))
+     }
+     for (f in date.features) {
+          # Currently convert date time
+          replaced.train_Date <- strptime(train[[f]], format='%d%b%y:%H:%M:%S', tz="UTC")
+          replaced.test_Date <- strptime(test[[f]], format='%d%b%y:%H:%M:%S', tz="UTC")
+          
+          if (f =="VAR_0204"){
+               train[['VAR_0204_weekdays']]<-as.character(weekdays(replaced.train_Date))
+               train[['VAR_0204_hour']]<-as.character(hour(replaced.train_Date))
+               test[['VAR_0204_weekdays']]<-as.character(weekdays(replaced.test_Date))
+               test[['VAR_0204_hour']]<-as.character(hour(replaced.test_Date))
+          }
+          replaced.train_Date<-as.double(replaced.train_Date)
+          replaced.test_Date<-as.double(replaced.test_Date)
+          train[[f]]=replaced.train_Date
+          test[[f]]=replaced.test_Date
+     }
+     print (train[,(date.features), with = F])
+     print (test[,(date.features), with = F])  
+}
+
 
 print("remaining non-date variables:")
 print(setdiff(diverse.features, date.features))
@@ -216,33 +271,33 @@ replaceMissingValueOption=1
 
 ## IMPlEMENTED OPTION 1 (begin)
 if (replaceMissingValueOption==1) {
-cat("replacing missing values with -1\n")
-for (f in setdiff(names(train),"target")) {
-     if (class(train[[f]])!="character") {
-          temp_train_col = ifelse(is.na(train[[f]]),-1,train[[f]])
-          temp_test_col = ifelse(is.na(test[[f]]),-1,test[[f]])
-          train[, (f):= temp_train_col]
-          test[, (f):= temp_test_col]
+     cat("replacing missing values with -1\n")
+     for (f in setdiff(names(train),"target")) {
+          if (class(train[[f]])!="character") {
+               temp_train_col = ifelse(is.na(train[[f]]),-1,train[[f]])
+               temp_test_col = ifelse(is.na(test[[f]]),-1,test[[f]])
+               train[, (f):= temp_train_col]
+               test[, (f):= temp_test_col]
+          }
      }
-}
 }
 ## IMPlEMENTED OPTION 1 (end)
 
 ## IMPlEMENTING OPTION 2 (begin)
 
 if (replaceMissingValueOption==2) {
-cat("replacing missing values with median\n")
-for (f in setdiff(names(train),"target")) {
-     if (class(train[[f]])!="character") {
-          train_median_col<-as.numeric(train[[f]])
-          train_median_col[is.na(train_median_col)]=median(train_median_col, na.rm=TRUE)
-          test_median_col<-as.numeric(test[[f]])
-          test_median_col[is.na(test_median_col)]=median(test_median_col, na.rm=TRUE)
-          train[, (f):= train_median_col]
-          test[, (f):= test_median_col]
+     cat("replacing missing values with median\n")
+     for (f in setdiff(names(train),"target")) {
+          if (class(train[[f]])!="character") {
+               train_median_col<-as.numeric(train[[f]])
+               train_median_col[is.na(train_median_col)]=median(train_median_col, na.rm=TRUE)
+               test_median_col<-as.numeric(test[[f]])
+               test_median_col[is.na(test_median_col)]=median(test_median_col, na.rm=TRUE)
+               train[, (f):= train_median_col]
+               test[, (f):= test_median_col]
+          }
      }
 }
-
 ## IMPlEMENTING OPTION 2 (end)
 
 # convert character variable to factor/categorical
@@ -253,9 +308,6 @@ for (f in setdiff(names(train),"target")) {
      }
 }
 
-# Now missing data are all filled.
-sum(is.na(train)) # 0
-sum(is.na(test)) # 0
 
 # ======= CHECK DATA AGAIN (for checking purpose only) ============
 feature.types<-lapply(train,class)
@@ -278,18 +330,35 @@ sum(feature.types=="integer")+sum(feature.types=="factor")+sum(feature.types=="n
 train<-data.frame(train)
 test<-data.frame(test)
 
+sum.na<-function(x) {
+     sum(is.na(x))
+}
+
+sumnacolvar<-sapply(test,sum.na)
+sumnacolvar[sumnacolvar>0]
+#as.character(train[['VAR_0204_weekdays']][!is.na(train[['VAR_0204_weekdays']])])
 # ============= replace "-1" and "" in categorical data with label "other"  ==================
+
 for (i in names(train)) {
      if (class(train[,i])=="factor") {
           temp = as.character(train[,i])
           temp_test = as.character(test[,i])
-          temp = ifelse(((temp=="")|(temp=="-1")),"other",temp)
-          temp_test = ifelse(((temp_test=="")|(temp_test=="-1")),"other",temp_test)
+          if (i%in%c("VAR_0204_weekdays","VAR_0204_hour")) {
+               mostfreq_train<-names(table(train[[i]]))[which.max(table(train[[i]]))]
+               temp = ifelse(is.na(temp),mostfreq_train,temp)
+               temp_test = ifelse(is.na(temp_test),mostfreq_train,temp_test)               
+          } else {          
+               temp = ifelse(((temp=="")|(temp=="-1")),"other",temp)
+               temp_test = ifelse(((temp_test=="")|(temp_test=="-1")),"other",temp_test)
+          }
           train[,i]=as.factor(temp)
           test[,i]=as.factor(temp_test)
      }
 }
 
+# check
+sum(is.na(train))
+sum(is.na(test))
 # ================== for categorical variables with only two levels, =========================
 # === remove it if the single dominant level makes up over 99.5% (close to zero variance) ====
 nearZeroVarFeatures<-c()
@@ -347,7 +416,7 @@ test<-test[,setdiff(names(test),factorFeatures)]
 
 # Double Check
 dim(train)
-dim(test)s
+dim(test)
 unique(unlist(lapply(train,class)))
 unique(unlist(lapply(test,class)))
 # all variable names are the same
